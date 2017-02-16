@@ -35,4 +35,10 @@ from   (values
           ('120000000008901.53')
        ) as t(a);
 
+\echo Евро
+select r.r::text||'.'||lpad(c.c::text,2,'0') as amount,
+       to_text((r.r::text||'.'||lpad(c.c::text,2,'0'))::numeric, 'евро') 
+       as to_text
+from generate_series(0,2) as r(r),generate_series(0,2) as c(c);
+
 rollback;

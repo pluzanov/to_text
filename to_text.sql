@@ -10,6 +10,7 @@ as $$
       currency - валюта. Допустимые значения: 
          рубль  - с дробной частью - копейки 
          доллар - с дробной частью - центы
+         евро   - с дробной частью - центы
          тонна  - без дробной части, вместе с scale_mode='none'
       scale_mode - как выводить дробную часть (копейки):
          text - выводить словами. Например: двенадцать копеек
@@ -23,20 +24,20 @@ as $$
    */
    ref (num, num_m, num_f, cop, cent, rub, dollar,
              num10x3, num10x6, num10x9, num10x12, num10x15, num10x18,
-             tonna)
+             tonna, euro)
    as (values 
       (0::int, 'ноль'::text, 'ноль'::text, 'копеек'::text, 'центов'::text, 
           'рублей'::text, 'долларов'::text, 'тысяч'::text, 'миллионов'::text, 
           'миллиардов'::text, 'триллионов'::text, 'квадриллионов'::text,
-          'квинтиллионов'::text, 'тонн'::text),
+          'квинтиллионов'::text, 'тонн'::text, 'евро'::text),
       (1::int, 'один'::text, 'одна'::text, 'копейка'::text, 'цент'::text,
           'рубль'::text, 'доллар'::text, 'тысяча'::text, 'миллион'::text,
           'миллиард'::text, 'триллион'::text, 'квадриллион'::text,
-          'квинтиллион'::text, 'тонна'::text), 
+          'квинтиллион'::text, 'тонна'::text, 'евро'::text), 
       (2::int, 'два'::text, 'две'::text, 'копейки'::text, 'цента'::text,
           'рубля'::text, 'доллара'::text, 'тысячи'::text, 'миллиона'::text,
           'миллиарда'::text, 'триллиона'::text, 'квадриллиона'::text,
-          'квинтиллиона'::text, 'тонны'::text)
+          'квинтиллиона'::text, 'тонны'::text, 'евро'::text)
    ),
    /* Некоторые константы */
    const (gender7, gender8, iszero) as (
@@ -47,11 +48,15 @@ as $$
                   then 'm' -- какого пола доллар
                   when to_text.currency = 'тонна'
                   then 'f' -- какого пола тонна
+                  when to_text.currency = 'евро'
+                  then 'm' -- какого пола евро
              end gender7,
              case
                   when to_text.currency = 'рубль'
                   then 'f' -- пол копейки
                   when to_text.currency = 'доллар'
+                  then 'm' -- пол цента
+                  when to_text.currency = 'евро'
                   then 'm' -- пол цента
              end gender8,
              trunc(to_text.amount) = 0 as iszero
@@ -199,10 +204,14 @@ as $$
                        then r.cop
                        when t.triadnum = 8 and to_text.currency = 'доллар'::text
                        then r.cent
+                       when t.triadnum = 8 and to_text.currency = 'евро'::text
+                       then r.cent
                        when t.triadnum = 7 and to_text.currency = 'рубль'::text
                        then r.rub
                        when t.triadnum = 7 and to_text.currency = 'доллар'::text
                        then r.dollar
+                       when t.triadnum = 7 and to_text.currency = 'евро'::text
+                       then r.euro
                        when t.triadnum = 7 and to_text.currency = 'тонна'::text
                        then r.tonna
                        when t.triadnum = 6 then r.num10x3
