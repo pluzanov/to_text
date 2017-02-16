@@ -234,5 +234,57 @@ as $$
           )
         , ' '::text) as retval
    from triads t, const;
-$$ immutable language sql;
+$$ strict immutable language sql;
+
+create or replace function uom2text (
+   amount bigint,
+   uom text,
+   text_case text default 'initcap'
+) returns text
+as $$
+<<local>>
+declare
+   uom text;
+   text_case text := lower(uom2text.text_case);
+   checks boolean := true;
+   retval text;
+begin
+   /* Проверка параметров */
+   if uom2text.amount not between 0 and 999999999999999999999 then
+      /* Максимальный bigint в это значение не влезет,
+         так что это скорее проверка на отрицательные значения
+      */
+      local.checks := false;
+   end if;
+   /* Поддерживается только тонна, но пусть ее можно будет записать
+      в любом регистре и с сокращениями 
+   */
+   if lower(uom2text.uom) in ('тонна', 'т', 'т.') then
+      local.uom := 'тонна';
+   else
+      local.checks := false;
+   end if;
+
+   if local.text_case not in ('initcap', 'lower', 'upper') then
+      local.checks := false;
+   end if;
+
+   assert local.checks, format('uom2text, ошибка в параметрах: %L %L %L',
+       uom2text.amount, uom2text.uom, uom2text.text_case);
+
+   /* Проверки пройдены */
+   local.retval := to_text(amount, local.uom, scale_mode => 'none');
+
+   if local.text_case = 'initcap' then
+      /* не совсем initcap, заглавная толька первая буква */
+      local.retval := upper(left(local.retval,1))||substring(local.retval,2);
+   elsif local.text_case = 'lower' then
+      local.retval := lower(local.retval);
+   elsif local.text_case = 'upper' then
+      local.retval := upper(local.retval);
+   end if;
+
+   return local.retval;
+end;
+$$ strict immutable language plpgsql;
 

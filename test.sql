@@ -41,4 +41,12 @@ select r.r::text||'.'||lpad(c.c::text,2,'0') as amount,
        as to_text
 from generate_series(0,2) as r(r),generate_series(0,2) as c(c);
 
+\echo uom2text - правильные вызовы:
+select uom2text(123, 'т');
+select uom2text(123, 'ТОННА', 'upper');
+
+\echo uom2text - неверные вызовы:
+select uom2text(123, 'т', 'qwe');
+select uom2text(123, 'qwe');
+select uom2text(-1, 'тонна');
 rollback;
