@@ -6,10 +6,11 @@ create or replace function to_text (
 as $$
 /* Выводит денежную сумму прописью(словами).
    Параметры:
-      amount - сумма. Не должна превышать 999,999,999,999,999.99
+      amount - сумма. Не должна превышать 999,999,999,999,999,999,999.99
       currency - валюта. Допустимые значения: 
          рубль  - с дробной частью - копейки 
          доллар - с дробной частью - центы
+         тонна  - без дробной части, вместе с scale_mode='none'
       scale_mode - как выводить дробную часть (копейки):
          text - выводить словами. Например: двенадцать копеек
          int  - цифрами. Например: 12 копеек
@@ -21,77 +22,85 @@ as $$
       Все возможные варианты склонений сводятся к формам для трех чисел: 0,1,2
    */
    ref (num, num_m, num_f, cop, cent, rub, dollar,
-          num10x3, num10x6, num10x9, num10x12)
+             num10x3, num10x6, num10x9, num10x12, num10x15, num10x18,
+             tonna)
    as (values 
       (0::int, 'ноль'::text, 'ноль'::text, 'копеек'::text, 'центов'::text, 
-       'рублей'::text, 'долларов'::text, 'тысяч'::text, 'миллионов'::text, 
-       'миллиардов'::text, 'триллионов'::text),
+          'рублей'::text, 'долларов'::text, 'тысяч'::text, 'миллионов'::text, 
+          'миллиардов'::text, 'триллионов'::text, 'квадриллионов'::text,
+          'квинтиллионов'::text, 'тонн'::text),
       (1::int, 'один'::text, 'одна'::text, 'копейка'::text, 'цент'::text,
-       'рубль'::text, 'доллар'::text, 'тысяча'::text, 'миллион'::text,
-       'миллиард'::text, 'триллион'::text), 
+          'рубль'::text, 'доллар'::text, 'тысяча'::text, 'миллион'::text,
+          'миллиард'::text, 'триллион'::text, 'квадриллион'::text,
+          'квинтиллион'::text, 'тонна'::text), 
       (2::int, 'два'::text, 'две'::text, 'копейки'::text, 'цента'::text,
-       'рубля'::text, 'доллара'::text, 'тысячи'::text, 'миллиона'::text,
-       'миллиарда'::text, 'триллиона'::text)
+          'рубля'::text, 'доллара'::text, 'тысячи'::text, 'миллиона'::text,
+          'миллиарда'::text, 'триллиона'::text, 'квадриллиона'::text,
+          'квинтиллиона'::text, 'тонны'::text)
    ),
    /* Некоторые константы */
-   const (gender5, gender6, iszero) as (
+   const (gender7, gender8, iszero) as (
       select case
                   when to_text.currency = 'рубль'
                   then 'm' -- какого пола рубль
                   when to_text.currency = 'доллар'
                   then 'm' -- какого пола доллар
-             end gender5,
+                  when to_text.currency = 'тонна'
+                  then 'f' -- какого пола тонна
+             end gender7,
              case
                   when to_text.currency = 'рубль'
                   then 'f' -- пол копейки
                   when to_text.currency = 'доллар'
                   then 'm' -- пол цента
-             end gender6,
+             end gender8,
              trunc(to_text.amount) = 0 as iszero
    ),
    /* Основная идея алгоритма.
       Сумма переводится в строку и разбивается на группы триад.
       Копейки также составляют отдельную триаду (дополняются слева 0).
       Например, сумма 1234.45 превратится в набор триад: 
-      000 000 000 001 234 045
+      000 000 000 000 000 001 234 045
       Дальше каждая триада обрабатывается отдельно, для этого они 
       преобразуются в массив, который разворачивается в строки через unnest.
       В конце, строки с текстами триад сворачиваются в одну через string_agg.
       Для каждой триады нужно превратить число в слова и добавить название.
-      Название триады определяется номером (triadnum). 1 - триллионы,
-      2 - миллиарды и т.д. Последние два номера это валюта и её дробная часть.
-      Например если currency='рубль', то triadnum=5 соответствует рублям,
-      а 6 - копейкам.
+      Название триады определяется номером (triadnum): 1 - квинтиллионы,
+      2 - квадриллионы, 3 - миллиарды и т.д. 
+      Последние два номера это валюта и её дробная часть.
+      Например если currency='рубль', то triadnum=7 соответствует рублям,
+      а 8 - копейкам.
    */
    triads (triadnum, num, int1, int2, int3, int23) as (
-      select t.triadnum, -- 0:триллионы, 1:миллиарды, ..., 5:рубли, 6:копейки
+      select t.triadnum, 
              t.num, -- три символа триады, для копеек выровнены до 3 знаков 
              substring(t.num,1,1)::int as int1,
              substring(t.num,2,1)::int as int2,
              substring(t.num,3,1)::int as int3,
              substring(t.num,2,2)::int as int23
       from   unnest (string_to_array(
-                overlay(ltrim(to_char(to_text.amount,'000,000,000,000,000.00')) 
-                placing ',0' from 20 for 1), ','))
+                overlay(ltrim(to_char(
+                   to_text.amount,'000,000,000,000,000,000,000.00'
+                )) placing ',0' from 28 for 1), ','))
              with ordinality as t(num,triadnum)
-      where  /* пустые триады не нужны, если это не рубли.
-                например в числе 1 000 000р не нужно выводить ничего про тысячи
+      where  /* Пустые триады не нужны, если это не рубли.
+                Например в числе 1 000 000р не нужно выводить ничего про тысячи
              */
-             t.num <> '000' or t.triadnum = 5 
-             /* если параметр scale_mode не запрещает, то нужны и копейки */
-             or (t.triadnum = 6 and to_text.scale_mode <> 'none')
+             t.num <> '000' or t.triadnum = 7 
+             /* Если параметр scale_mode не запрещает, то нужны и копейки */
+             or (t.triadnum = 8 and to_text.scale_mode <> 'none')
    )
    select string_agg (
-          /* обработка триады */
-          case /* если целая часть суммы равна 0, то можно пропустить
+          /* Обработка триады */
+          case /* Если целая часть суммы равна 0, то можно пропустить
                   всё кроме копеек */ 
-               when t.triadnum = 5 and t.num = '000' and const.iszero
+               when t.triadnum = 7 and t.num = '000' and const.iszero
                then 'ноль '::text
-               /* вывод дробной части определяется параметром scale_mode */
-               when t.triadnum = 6 and to_text.scale_mode = 'text' and 
+               /* Вывод дробной части определяется параметром scale_mode */
+               when t.triadnum = 8 and to_text.scale_mode = 'text' and 
                     t.num = '000' 
                then 'ноль '::text
-               when t.triadnum = 6 and to_text.scale_mode = 'int'
+               when t.triadnum = 8 and to_text.scale_mode = 'int'
                then substring(t.num,2,2) || ' '::text
           else
              case when t.int1 = 0
@@ -111,7 +120,7 @@ as $$
                   || ' '::text
              end 
              ||
-             /* в числах до сотни 11-19 выделяются, пускаем впереди всех */
+             /* В числах до сотни 11-19 выделяются, пускаем впереди всех */
              case when t.int23 between 11 and 19 
                   then case t.int23
                           when 11 then 'одиннадцать'::text
@@ -146,18 +155,23 @@ as $$
                      /* единицы */
                      case when (t.int3 between 1 and 9)
                      then
+                        /* Как выводить 1,2: один,два или одна,две?
+                           Для триад с 1 по 6 - всегда одинаково.
+                           А для 7 и 8 это зависит от пола валюты 
+                           (например, рубли - мужской, копейка - женский и т.д.
+                        */
                         case when t.int3 in (1,2)
-                             then (select case when t.triadnum = 5 and 
-                                                    const.gender5 = 'm'::text
+                             then (select case when t.triadnum = 7 and 
+                                                    const.gender7 = 'm'::text
                                                then r.num_m
-                                               when t.triadnum = 5 and 
-                                                    const.gender5 = 'f'::text
+                                               when t.triadnum = 7 and 
+                                                    const.gender7 = 'f'::text
                                                then r.num_f
-                                               when t.triadnum = 6 and 
-                                                    const.gender6 = 'm'::text
+                                               when t.triadnum = 8 and 
+                                                    const.gender8 = 'm'::text
                                                then r.num_m
-                                               when t.triadnum = 6 and 
-                                                    const.gender6 = 'f'::text
+                                               when t.triadnum = 8 and 
+                                                    const.gender8 = 'f'::text
                                                then r.num_f
                                           end
                                    from   ref r 
@@ -177,20 +191,27 @@ as $$
              end 
           end
           ||
-          -- названия триад: тысячи, миллионы, и т.д. 
-          -- здесь же ед.изм.: рубли, копейки 
-          (select case when t.triadnum = 6 and to_text.currency = 'рубль'::text
+          /* Названия триад: тысячи, миллионы, и т.д. 
+             и названия валют: рубли, копейки, пр.
+             Здесь же нужно привязать дробную часть к валюте:
+             у рублей - копейки, у долларов - центы.
+          */
+          (select case when t.triadnum = 8 and to_text.currency = 'рубль'::text
                        then r.cop
-                       when t.triadnum = 6 and to_text.currency = 'доллар'::text
+                       when t.triadnum = 8 and to_text.currency = 'доллар'::text
                        then r.cent
-                       when t.triadnum = 5 and to_text.currency = 'рубль'::text
+                       when t.triadnum = 7 and to_text.currency = 'рубль'::text
                        then r.rub
-                       when t.triadnum = 5 and to_text.currency = 'доллар'::text
+                       when t.triadnum = 7 and to_text.currency = 'доллар'::text
                        then r.dollar
-                       when t.triadnum = 4 then r.num10x3
-                       when t.triadnum = 3 then r.num10x6
-                       when t.triadnum = 2 then r.num10x9
-                       when t.triadnum = 1 then r.num10x12
+                       when t.triadnum = 7 and to_text.currency = 'тонна'::text
+                       then r.tonna
+                       when t.triadnum = 6 then r.num10x3
+                       when t.triadnum = 5 then r.num10x6
+                       when t.triadnum = 4 then r.num10x9
+                       when t.triadnum = 3 then r.num10x12
+                       when t.triadnum = 2 then r.num10x15
+                       when t.triadnum = 1 then r.num10x18
                   end
            from   ref r
            where  r.num = 
