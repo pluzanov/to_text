@@ -44,6 +44,7 @@ from generate_series(0,2) as r(r),generate_series(0,2) as c(c);
 \echo uom2text - правильные вызовы:
 select uom2text(123, 'т');
 select uom2text(123, 'ТОННА', 'upper');
+select to_text(1234.23, 'рубль', scale_mode => 'int');
 
 \echo uom2text - неверные вызовы:
 select uom2text(123, 'т', 'qwe');

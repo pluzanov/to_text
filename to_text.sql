@@ -177,6 +177,11 @@ as $$
                                                when t.triadnum = 8 and 
                                                     const.gender8 = 'f'::text
                                                then r.num_f
+                                               /* тысяча - женского рода */
+                                               when t.triadnum = 6 then r.num_f
+                                               /* миллионы, миллиарды, ... - мужского */
+                                               when t.triadnum in (1,2,3,4,5) 
+                                               then r.num_m
                                           end
                                    from   ref r 
                                    where  r.num = t.int3
